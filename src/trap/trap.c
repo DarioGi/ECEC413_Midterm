@@ -1,3 +1,6 @@
+// Modified by: Darius Remeika (dr542) and Hardip Sahota (hs452)
+// Modified on: 11/04/2015
+
 /*  Purpose: Calculate definite integral using trapezoidal rule.
  *
  * Input:   a, b, n

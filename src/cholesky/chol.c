@@ -1,6 +1,10 @@
 /* Cholesky decomposition.
- * Compile as follows:
- * gcc -fopenmp -o chol chol.c chol_gold.c -lpthread -lm -std=c99
+ *
+ * Modified by: Darius Remeika (dr542) and Hardip Sahota (hs452)
+ * Modified on: 11/04/2015
+ *
+ * Compile as follows: 
+ * gcc -o chol chol.c chol_gold.c -lpthread -fopenmp -lm -std=c99
  */
 
 // includes, system
@@ -22,11 +26,10 @@ typedef struct chol_thread
 	sem_t *barrier_sem; /* Signals that barrier is safe to cross. */
 	int *count;
 	
-}CHOL_THREAD;
+} CHOL_THREAD;
 
 void* thread_chol_pthread(void *arg);
 void pthreads_barrier_sync(CHOL_THREAD *data, int index);
-
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -48,25 +51,30 @@ int num_of_threads = 16;
 // Program main
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char** argv) 
-{	
-	// Check command line arguments
-	if ( testing )
-	{
-		if ( argc == 2 )
-		{
-			num_of_threads = atoi(argv[1]);
-		}
-		else
-		{
-			printf("Usage: Chol <num of threads>\n");
-			exit(-1);
-		}
-	}
-	else
-	{
-		printf("Error. This program accepts no arguments. \n");
-		exit(0);
-	}		
+{
+    struct timeval start, stop;
+    float timer;
+    
+    // Check command line arguments
+    if ( testing )
+    {
+        if ( argc == 2 )
+        {
+            num_of_threads = atoi(argv[1]);
+        }
+        else
+        {
+            printf("Usage: Chol <num of threads>\n");
+            exit(-1);
+        }
+    }
+    else
+    {
+        if( argc > 1){
+            printf("Error. This program accepts no arguments. \n");
+            exit(0);
+        }
+    }
 	 
 	// Matrices for the program
 	Matrix A; // The N x N input matrix
@@ -79,29 +87,29 @@ int main(int argc, char** argv)
 
 	// Create the positive definite matrix. May require a few tries if we are unlucky
 	int success = 0;
-	while(!success){
+	while ( !success )
+	{
 		A = create_positive_definite_matrix(MATRIX_SIZE, MATRIX_SIZE);
-		if(A.elements != NULL)
-				  success = 1;
+		if ( A.elements != NULL )
+		success = 1;
 	}
-	// print_matrix(A);
-	// getchar();
-
 
 	reference  = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0); // Create a matrix to store the CPU result
 	U_pthreads =  allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0); // Create a matrix to store the pthread result
 	U_openmp =  allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0); // Create a matrix to store the openmp result
-	struct timeval start, stop;
 
 	// compute the Cholesky decomposition on the CPU; single threaded version	
 	printf("Performing Cholesky decomposition on the CPU using the single-threaded version. \n");
-	gettimeofday(&start, NULL);
+    gettimeofday(&start, NULL);
 	int status = chol_gold(A, reference);
-	gettimeofday(&stop, NULL);
-	printf("CPU run time = %0.6f s.\n", (stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec) / (float)1000000));
-	if(status == 0){
-			  printf("Cholesky decomposition failed. The input matrix is not positive definite. \n");
-			  exit(0);
+    gettimeofday(&stop, NULL);
+    timer = (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec) / (float)1000000);
+    printf("CPU run time for Serial = %0.6f s.\n", timer);
+	
+	if ( status == 0 )
+	{
+		printf("Cholesky decomposition failed. The input matrix is not positive definite. \n");
+		exit(0);
 	}
 	//print_matrix(reference);
 	
@@ -114,14 +122,18 @@ int main(int argc, char** argv)
 
 	/* MODIFY THIS CODE: Perform the Cholesky decomposition using pthreads. The resulting upper triangular matrix should be returned in 
 	 U_pthreads */
-	gettimeofday(&start, NULL);
+    gettimeofday(&start, NULL);
 	chol_using_pthreads(A, U_pthreads);
-	gettimeofday(&stop, NULL);
-	printf("CPU run time = %0.6f s.\n", (stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec) / (float)1000000));
-	//print_matrix(U_pthreads);
-	/* MODIFY THIS CODE: Perform the Cholesky decomposition using openmp. The resulting upper traingular matrix should be returned in U_openmp */
-	//chol_using_openmp(A, U_openmp);
+    gettimeofday(&stop, NULL);
+    timer = (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec) / (float)1000000);
+    printf("CPU run time for PThreads = %0.6f s.\n", timer);
 
+	/* MODIFY THIS CODE: Perform the Cholesky decomposition using openmp. The resulting upper traingular matrix should be returned in U_openmp */
+    gettimeofday(&start, NULL);
+	chol_using_openmp(A, U_openmp);
+    gettimeofday(&stop, NULL);
+    timer = (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec) / (float)1000000);
+    printf("CPU run time for OpenMP = %0.6f s.\n", timer);
 
 	// Check if the pthread and openmp results are equivalent to the expected solution
 	if(check_chol(A, U_pthreads) == 0) 
@@ -252,6 +264,50 @@ void pthreads_barrier_sync(CHOL_THREAD *data, int index)
 /* Write code to perform Cholesky decopmposition using openmp. */
 void chol_using_openmp(const Matrix A, Matrix U)
 {
+    unsigned int i, j, k;
+    unsigned int num_rows = U.num_rows;
+    unsigned int size = A.num_rows * A.num_columns;
+    float *u = U.elements, *a = A.elements;
+    
+#pragma omp parallel private(i, j, k) shared(U, num_rows) num_threads(num_of_threads)
+{
+    // Copy the contents of the A matrix into the working matrix U
+#pragma omp for
+    for (i = 0; i < size; i ++)
+        u[i] = a[i];
+
+    // Perform the Cholesky decomposition in place on the U matrix
+    for(k = 0; k < num_rows; k++){
+        
+        // Take the square root of the diagonal element
+#pragma omp master 
+{
+        u[k * num_rows + k] = sqrt(u[k * num_rows + k]);
+    
+        if(u[k * num_rows + k] <= 0){
+            printf("Cholesky decomposition failed. \n");
+            exit(0);
+        }
+}
+        // Division step
+#pragma omp for
+        for(j = (k + 1); j < num_rows; j++)
+            u[k * num_rows + j] /= u[k * num_rows + k]; // Division step
+        
+        // Elimination step
+#pragma omp for
+        for(i = (k + 1); i < num_rows; i++)
+            for(j = i; j < num_rows; j++)
+                u[i * num_rows + j] -= u[k * num_rows + i] * u[k * num_rows + j];
+        
+    }
+    
+    // As the final step, zero out the lower triangular portion of U
+#pragma omp for
+    for(i = 0; i < num_rows; i++)
+        for(j = 0; j < i; j++)
+            u[i * num_rows + j] = 0.0;
+}
 }
 
 
