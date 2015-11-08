@@ -45,7 +45,7 @@ void chol_using_pthreads(const Matrix, Matrix);
 void chol_using_openmp(const Matrix, Matrix);
 #define TRUE 1
 #define FALSE !TRUE
-int testing = TRUE;
+int testing = FALSE;
 int num_of_threads = 16;
 ////////////////////////////////////////////////////////////////////////////////
 // Program main
