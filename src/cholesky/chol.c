@@ -141,10 +141,10 @@ int main(int argc, char** argv)
 	else
 			  printf("Cholesky decomposition using pthreads was successful. \n");
 
-	//if(check_chol(A, U_openmp) == 0) 
-	//		  printf("Error performing Cholesky decomposition using openmp. \n");
-	//else	
-	//		  printf("Cholesky decomposition using openmp was successful. \n");
+	if(check_chol(A, U_openmp) == 0) 
+			  printf("Error performing Cholesky decomposition using openmp. \n");
+	else
+			  printf("Cholesky decomposition using openmp was successful. \n");
 
 
 
